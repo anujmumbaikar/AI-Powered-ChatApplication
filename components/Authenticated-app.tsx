@@ -46,19 +46,27 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL as string;
 
   useEffect(() => {
-    const syncChannelWithUrl = async () => {
-      if (!client) return;
+  const syncChannelWithUrl = async () => {
+    if (!client || !channelId) return;
 
-      if (channelId) {
-        const channel = client.channel("messaging", channelId);
-        await channel.watch();
-        setActiveChannel(channel);
-      } else {
-        setActiveChannel(undefined);
+    try {
+      // Query the channel from Stream, this fetches messages + members
+      const channels = await client.queryChannels({
+        type: "messaging",
+        id: { $eq: channelId },
+      });
+
+      if (channels.length > 0) {
+        setActiveChannel(channels[0]);
       }
-    };
-    syncChannelWithUrl();
-  }, [channelId, client, setActiveChannel]);
+    } catch (err) {
+      console.error("Error fetching channel:", err);
+    }
+  };
+
+  syncChannelWithUrl();
+}, [channelId, client, setActiveChannel]);
+
 
   // ✅ Create a new chat + start AI agent
   const handleNewChatMessage = async (message: { text: string }) => {
@@ -80,7 +88,6 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
         });
       });
 
-      // ✅ Use axios instead of fetch
       const { data } = await axios.post("/api/start-ai-agent", {
         channel_id: newChannel.id,
         channel_type: "messaging",
@@ -108,8 +115,6 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
     router.push("/");
     setSidebarOpen(false);
   };
-
-  // ✅ Channel delete handler (still direct SDK call, no axios needed here)
   const handleDeleteClick = (channel: Channel) => {
     setChannelToDelete(channel);
     setShowDeleteDialog(true);
